@@ -20,7 +20,6 @@ import BalanceRepository from '../repository/application/balance-repository';
 import EventRepository from '../repository/application/event-repository';
 import TransferRepository from '../repository/application/transfer-repository';
 import NetworkRepository from '../repository/application/network-repository';
-import { PubSub } from 'graphql-subscriptions';
 import BlockDbRepository from '../repository/infra/repository/block-db-repository';
 import TransactionDbRepository from '../repository/infra/repository/transaction-db-repository';
 import BalanceDbRepository from '../repository/infra/repository/balance-db-repository';
@@ -33,14 +32,6 @@ import MempoolGateway from '../repository/gateway/mempool-gateway';
 import MempoolApiGateway from '../repository/infra/gateway/mempool-api-gateway';
 import PactGateway from '../repository/gateway/pact-gateway';
 import PactApiGateway from '../repository/infra/gateway/pact-api-gateway';
-
-/**
- * PubSub instance for GraphQL subscriptions
- *
- * This shared instance enables real-time updates through GraphQL subscriptions,
- * allowing the server to push data to clients when events occur.
- */
-export const publishSubscribe = new PubSub();
 
 /**
  * Resolver context type definition for the GraphQL API
@@ -114,7 +105,6 @@ export type ResolverContext = {
   gasGateway: GasGateway;
   mempoolGateway: MempoolGateway;
   pactGateway: PactGateway;
-  pubSub: PubSub;
   signal: AbortSignal;
 };
 
@@ -146,7 +136,6 @@ export const createGraphqlContext = () => {
     gasGateway: new GasApiGateway(),
     mempoolGateway: new MempoolApiGateway(),
     pactGateway: new PactApiGateway(),
-    pubSub: publishSubscribe,
     signal: new AbortController().signal,
   };
 

@@ -9,7 +9,7 @@ export const transactionsFixture004 = {
       },
       edges: [
         {
-          cursor: '1733655414',
+          cursor: 'MTczMzY1NTQxNA==',
           node: {
             id: 'VHJhbnNhY3Rpb246WyJPVDdjN1g0TXFsMjRkc2xtNEh2c2M1dHlLcmpqeFBESW15b3BxbFJKS2lRIiwicUdrZllsQVpmbTBqam1SQkExc3BCY1BRcllabFlXQ2lrTjJKUWhVRk1JUSJd',
             hash: 'qGkfYlAZfm0jjmRBA1spBcPQrYZlYWCikN2JQhUFMIQ',

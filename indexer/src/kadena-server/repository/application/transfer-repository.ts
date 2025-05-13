@@ -25,6 +25,8 @@ export interface GetCrossChainTransferByPactIdParams {
   pactId: string;
   amount: string;
   requestKey: string;
+  receiverAccount: string;
+  senderAccount: string;
 }
 
 export type TransferOutput = Omit<Transfer, 'block' | 'transaction' | 'crossChainTransfer'> & {

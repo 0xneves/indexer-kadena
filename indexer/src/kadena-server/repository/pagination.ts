@@ -115,7 +115,7 @@ export const getPageInfo = <T>({
   // that was fetched to determine if there are more pages
   const limit = (limitParam ?? DEFAULT_LIMIT) - LIMIT_NEXT_PAGE_CHECK;
 
-  // Case 1: No results found - return empty page info
+  // Empty case: No results found - return empty page info
   if (length === 0) {
     return {
       pageInfo: {
@@ -128,23 +128,6 @@ export const getPageInfo = <T>({
     };
   }
 
-  // Case 2: Only a single result - simplify the logic for this case
-  if (length === 1) {
-    return {
-      pageInfo: {
-        // For a single result, both start and end cursor are the same
-        startCursor: encodeCursor(edges[0].cursor),
-        endCursor: encodeCursor(edges[0].cursor),
-        // If 'before' exists, there might be more newer items (for backward pagination)
-        hasNextPage: !!before,
-        // If 'after' exists, there might be more older items (for forward pagination)
-        hasPreviousPage: !!after,
-      },
-      edges,
-    };
-  }
-
-  // Case 3: Multiple results - compute page info based on sort order
   let hasNextPage = false;
   let hasPreviousPage = false;
   let startCursor = null;

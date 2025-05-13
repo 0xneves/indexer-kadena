@@ -105,7 +105,8 @@ Docker Compose provides a way to run the entire indexer stack with a single comm
 To start all services:
 
 ```bash
-yarn dev
+$ yarn compose:up
+$ yarn compose:down
 ```
 
 **NOTE:** Using the image on with the composer require the database `DB_USERNAME` to default to `postgres`.
@@ -165,6 +166,8 @@ yarn graphql:generate-types
 
 The Kadena Indexer project includes several types of tests to ensure the functionality and reliability of the codebase. Below are the instructions to run these tests:
 
+You can set your graphQL endpoint in the `.env.testing` file, otherwise it defaults to `localhost:3001`.
+
 ### 6.1. Unit Tests
 
 Unit tests are designed to test individual components or functions in isolation. To run the unit tests, use the following command:
@@ -177,13 +180,16 @@ This command will execute all the unit tests located in the `tests/unit` directo
 
 ### 6.2. Integration Tests
 
-Integration tests are used to test the queries and subscriptions of the GraphQL API. To run the integration tests, use the following command:
+Integration tests are used to test the queries and subscriptions of the GraphQL API. Run the integration tests separatedly because jest cannot handle using the same client for running queries and wss:
+
+**Notice:** Queries and Subscriptions rely on a running postgres database with the same schema as the indexer with the full history synched correctly. Only run this test if you intend to host your own database.
 
 ```bash
-yarn test:integration
+yarn test:queries
+yarn test:subscriptions
 ```
 
-This command will execute the integration tests located in the `tests/integration` directory, using the environment variables specified in the `.env.testing` file.
+This command will execute the integration tests located in the `tests/integration` directory, using the environment variables specified in `.env`.
 
 ### 6.3. Specific Integration File Test
 
@@ -192,8 +198,6 @@ File tests are executed using the same environment as the integration tests. To 
 ```bash
 yarn test:file tests/integration/events.query.test.ts
 ```
-
-This command will run tests using the environment variables from the `.env.testing` file.
 
 ### 6.4. Smoke Tests
 

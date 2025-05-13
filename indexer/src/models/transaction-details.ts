@@ -153,12 +153,6 @@ TransactionDetails.init(
     timestamps: true,
     sequelize,
     modelName: 'TransactionDetails',
-    indexes: [
-      {
-        name: 'transactiondetails_transactionid_idx',
-        fields: ['transactionId'],
-      },
-    ],
   },
 );
 

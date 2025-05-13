@@ -33,6 +33,15 @@ export const transactionQueryResolver: QueryResolvers<ResolverContext>['transact
   context,
 ) => {
   const { requestKey, blockHash, minimumDepth } = args;
+
+  if (minimumDepth !== undefined && minimumDepth !== null && minimumDepth < 1) {
+    throw new Error('Minimum depth must not be lower than 1.');
+  }
+
+  if (minimumDepth !== undefined && minimumDepth !== null && minimumDepth > 100) {
+    throw new Error('Minimum depth must not be higher than 100.');
+  }
+
   const transactions = await context.transactionRepository.getTransactionsByRequestKey({
     requestKey,
     blockHash,

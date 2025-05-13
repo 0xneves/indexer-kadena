@@ -15,13 +15,12 @@ console.info('[INFO][INFRA][INFRA_CONFIG] Loading environment variables...');
 dotenv.config();
 
 import { program } from 'commander';
-import { startStreaming } from './services/sync/streaming';
-import { usePostgraphile } from './server/metrics';
-import { useKadenaGraphqlServer } from './kadena-server/server';
+import { startGraphqlServer } from './kadena-server/server';
 import { closeDatabase } from './config/database';
 import { initializeDatabase } from './config/init';
-import { backfillBalances } from './services/sync/balances';
-import { startMissingBlocks } from './services/sync/missing';
+import { startStreaming } from './services/streaming';
+import { backfillBalances } from '@/services/balances';
+import { startMissingBlocks } from '@/services/missing';
 
 /**
  * Command-line interface configuration using Commander.
@@ -29,7 +28,6 @@ import { startMissingBlocks } from './services/sync/missing';
  */
 program
   .option('-s, --streaming', 'Start streaming blockchain data')
-  .option('-g, --oldGraphql', 'Start GraphQL server based on Postgraphile')
   .option('-t, --graphql', 'Start GraphQL server based on kadena schema')
   .option('-f, --guards', 'Backfill the guards')
   .option('-m, --missing', 'Missing blocks')
@@ -70,10 +68,8 @@ async function main() {
     } else if (options.missing) {
       await startMissingBlocks();
       process.exit(0);
-    } else if (options.oldGraphql) {
-      await usePostgraphile();
     } else if (options.graphql) {
-      await useKadenaGraphqlServer();
+      await startGraphqlServer();
     } else {
       console.info('[INFO][BIZ][BIZ_FLOW] No specific task requested.');
     }

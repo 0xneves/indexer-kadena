@@ -5,17 +5,17 @@ import { blocksFromDepthFixture002 } from '../fixtures/blocks-from-depth/blocks-
 const client = new GraphQLClient(process.env.API_URL ?? 'http://localhost:3001/graphql');
 
 describe('Blocks from depth', () => {
-  it.skip('#001', async () => {
-    const query = getBlocksFromDepthQuery({ minimumDepth: 10, after: 'OTE1OTgwMzY=' });
+  it('#001', async () => {
+    const query = getBlocksFromDepthQuery({ minimumDepth: 3, after: 'NTc4NTg5MDoxOQ==' });
     const data = await client.request(query);
     expect(blocksFromDepthFixture001.data).toMatchObject(data);
   });
 
-  it.skip('#002', async () => {
+  it('#002', async () => {
     const query = getBlocksFromDepthQuery({
-      minimumDepth: 10,
-      chainIds: ['8', '9'],
-      after: 'OTE1OTgwMzY=',
+      minimumDepth: 5,
+      chainIds: ['12', '13'],
+      after: 'NTc4NTcxNDoxMg==',
     });
     const data = await client.request(query);
     expect(blocksFromDepthFixture002.data).toMatchObject(data);

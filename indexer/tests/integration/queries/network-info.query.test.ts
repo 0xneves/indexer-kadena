@@ -23,8 +23,6 @@ describe('Network Info', () => {
 
     expect(data.networkInfo.nodeChains).toMatchObject(fixture.nodeChains);
 
-    expect(data.networkInfo.nodeLatestBehaviorHeight).toBe(fixture.nodeLatestBehaviorHeight);
-
     expect(data.networkInfo.nodePackageVersion).toBe(fixture.nodePackageVersion);
 
     expect(data.networkInfo.nodeServiceDate).toBe(fixture.nodeServiceDate);

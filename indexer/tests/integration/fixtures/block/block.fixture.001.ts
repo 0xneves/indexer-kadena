@@ -15,7 +15,7 @@ export const blockFixture001 = {
         },
         edges: [
           {
-            cursor: '257165675',
+            cursor: 'MjU3MTY1Njc1',
             node: {
               chainId: 10,
               height: 5370064,
@@ -71,7 +71,7 @@ export const blockFixture001 = {
       powHash: '00000000000000017af989466338f4c86bd3e2a9e6eb7860366fe377428b8bd7',
       target: 'WcVbkSM_1xf7DgJgoL6QKFKrX4SFcvxEEAAAAAAAAAA',
       transactions: {
-        totalCount: 0,
+        totalCount: 1,
         pageInfo: {
           endCursor: 'MTczMzU3MjgwMw==',
           hasNextPage: false,
@@ -80,7 +80,7 @@ export const blockFixture001 = {
         },
         edges: [
           {
-            cursor: '1733572803',
+            cursor: 'MTczMzU3MjgwMw==',
             node: {
               id: 'VHJhbnNhY3Rpb246WyJiNnBybXAzVkZIeE12cmR3VlpfREtiOGVvNW1vUEp2M1N3TkEwR0xwOEkwIiwiSWs1QmVVaG5MVGs1UlZaRk9XOXlMV0p0VlU1SFZIZHViR3d6TFRGdE5VMUVNaloyU1ZaWVprVklVbWNpIl0=',
             },

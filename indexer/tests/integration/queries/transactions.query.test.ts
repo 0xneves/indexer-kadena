@@ -9,6 +9,7 @@ import { transactionsFixture006 } from '../fixtures/transactions/transactions.fi
 import { transactionsFixture007 } from '../fixtures/transactions/transactions.fixture.007';
 import { transactionsFixture008 } from '../fixtures/transactions/transactions.fixture.008';
 import { transactionsFixture009 } from '../fixtures/transactions/transactions.fixture.009';
+import { transactionsFixture010 } from '../fixtures/transactions/transactions.fixture.010';
 const client = new GraphQLClient(process.env.API_URL ?? 'http://localhost:3001/graphql');
 
 describe('Transactions', () => {
@@ -105,5 +106,16 @@ describe('Transactions', () => {
 
     const data = await client.request(query);
     expect(transactionsFixture009.data).toMatchObject(data);
+  });
+
+  it('#010 - coin + minimumDepth', async () => {
+    const query = getTransactionsQuery({
+      fungibleName: 'coin',
+      minimumDepth: 10,
+      after: 'MTc0NjQ3MzUyMg==',
+    });
+
+    const data = await client.request(query);
+    expect(transactionsFixture010.data).toMatchObject(data);
   });
 });

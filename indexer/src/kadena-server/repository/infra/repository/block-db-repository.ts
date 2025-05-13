@@ -27,7 +27,7 @@ import BlockRepository, {
 import { getPageInfo, getPaginationParams } from '../../pagination';
 import { blockValidator } from '../schema-validator/block-schema-validator';
 import Balance from '../../../../models/balance';
-import { handleSingleQuery } from '../../../utils/raw-query';
+import { handleSingleQuery } from '../../../../utils/raw-query';
 import { formatGuard_NODE } from '../../../../utils/chainweb-node';
 import { MEMORY_CACHE } from '../../../../cache/init';
 import { NODE_INFO_KEY } from '../../../../cache/keys';
@@ -92,23 +92,131 @@ export default class BlockDbRepository implements BlockRepository {
       last,
     });
 
-    const query: FindOptions<BlockAttributes> = {
-      where: {
-        height: { [Op.gt]: minimumDepth ?? 0 },
-        ...(after && { id: { [Op.lt]: after } }),
-        ...(before && { id: { [Op.gt]: before } }),
-        ...(!!chainIds?.length && { chainId: { [Op.in]: chainIds } }),
-      },
-      limit,
-      order: [['id', order]],
-    };
+    const chainIdsToUse = chainIds?.length ? chainIds.map(Number) : await this.getChainIds();
 
-    const rows = await BlockModel.findAll(query);
+    let allFetchedBlocks: any[] = [];
+    let lastHeight: number | null = null;
+    let lastChainId: number | null = null;
 
-    const edges = rows.map(row => ({
-      cursor: row.id.toString(),
-      node: blockValidator.mapFromSequelize(row),
-    }));
+    if (after) {
+      const [heightStr, chainIdStr] = after.split(':');
+      lastHeight = parseInt(heightStr, 10);
+      lastChainId = parseInt(chainIdStr, 10);
+
+      if (isNaN(lastHeight) || isNaN(lastChainId)) {
+        lastHeight = null;
+        lastChainId = null;
+      }
+    }
+
+    const batchSize = Math.max(limit * 2, 50); // Fetch more than needed in each batch
+    let hasMoreBlocks = true;
+
+    // Base query parameters and conditions for chain ID filtering
+    const baseQueryParams: any[] = [batchSize];
+    let baseConditions: string[] = [];
+
+    // Add chain ID filtering - only need to do this once since chainIdsToUse doesn't change
+    if (chainIdsToUse.length > 0) {
+      baseQueryParams.push(chainIdsToUse);
+      baseConditions.push(`"chainId" = ANY($${baseQueryParams.length})`);
+    }
+
+    // Keep fetching batches until we have enough blocks that meet the depth requirement
+    while (allFetchedBlocks.length < limit && hasMoreBlocks) {
+      const queryParams: any[] = [...baseQueryParams];
+      let conditions = [...baseConditions];
+
+      if (lastHeight !== null && lastChainId !== null) {
+        queryParams.push(lastHeight);
+        queryParams.push(lastChainId);
+
+        if (order === 'DESC') {
+          // For DESC order, get blocks with lower height or same height but different chain
+          conditions.push(
+            `(height < $${queryParams.length - 1} OR (height = $${queryParams.length - 1} AND "chainId" < $${queryParams.length}))`,
+          );
+        } else {
+          // For ASC order, get blocks with higher height or same height but different chain
+          conditions.push(
+            `(height > $${queryParams.length - 1} OR (height = $${queryParams.length - 1} AND "chainId" > $${queryParams.length}))`,
+          );
+        }
+      }
+
+      if (before) {
+        const [heightStr, chainIdStr] = before.split(':');
+        const beforeHeight = parseInt(heightStr, 10);
+        const beforeChainId = parseInt(chainIdStr, 10);
+
+        if (!isNaN(beforeHeight) && !isNaN(beforeChainId)) {
+          queryParams.push(beforeHeight);
+          queryParams.push(beforeChainId);
+
+          if (order === 'DESC') {
+            // For DESC order with "before", get blocks with higher height
+            conditions.push(
+              `(height > $${queryParams.length - 1} OR (height = $${queryParams.length - 1} AND "chainId" > $${queryParams.length}))`,
+            );
+          } else {
+            // For ASC order with "before", get blocks with lower height
+            conditions.push(
+              `(height < $${queryParams.length - 1} OR (height = $${queryParams.length - 1} AND "chainId" < $${queryParams.length}))`,
+            );
+          }
+        }
+      }
+
+      const query = `
+        SELECT *
+        FROM "Blocks"
+        ${conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''}
+        ORDER BY height ${order}, "chainId" ${order}
+        LIMIT $1
+      `;
+
+      const { rows: blockRows } = await rootPgPool.query(query, queryParams);
+
+      if (blockRows.length < batchSize) {
+        hasMoreBlocks = false;
+      }
+
+      if (blockRows.length === 0) {
+        break; // No more blocks to process
+      }
+
+      if (minimumDepth) {
+        const blockHashToDepth = await this.createBlockDepthMap(blockRows, 'hash', minimumDepth);
+
+        const filteredBlocks = blockRows.filter(
+          block => blockHashToDepth[block.hash] >= minimumDepth,
+        );
+
+        allFetchedBlocks = [...allFetchedBlocks, ...filteredBlocks];
+      } else {
+        allFetchedBlocks = [...allFetchedBlocks, ...blockRows];
+      }
+
+      // Update cursor for next batch using the last block's height and chainId
+      const lastBlock = blockRows[blockRows.length - 1];
+      lastHeight = lastBlock.height;
+      lastChainId = lastBlock.chainId;
+    }
+
+    const edges = allFetchedBlocks
+      .slice(0, limit)
+      .map(row => ({
+        cursor: `${row.height}:${row.chainId}`,
+        node: blockValidator.validate(row),
+      }))
+      .sort((a, b) => {
+        const aNode = a.node as unknown as { id: string };
+        const bNode = b.node as unknown as { id: string };
+        if (a.cursor === b.cursor) {
+          return aNode.id > bNode.id ? 1 : -1;
+        }
+        return 0;
+      });
 
     const pageInfo = getPageInfo({ edges, order, limit, after, before });
     return pageInfo;
@@ -120,6 +228,9 @@ export default class BlockDbRepository implements BlockRepository {
    * This method fetches blocks between the specified start and end heights,
    * supporting cursor-based pagination and chain filtering for efficient
    * navigation through large result sets.
+   *
+   * Uses keyset pagination with compound cursors (height:id) for better performance
+   * when navigating through large datasets.
    *
    * @param params - Object containing height range and pagination parameters
    * @returns Promise resolving to page info and block edges
@@ -146,13 +257,31 @@ export default class BlockDbRepository implements BlockRepository {
     let conditions = '';
 
     if (before) {
-      queryParams.push(before);
-      conditions += `\nAND b.id > $${queryParams.length}`;
+      // Try to parse as compound cursor format (height:id)
+      const [height, id] = before.split(':');
+      const beforeHeight = parseInt(height, 10);
+      const beforeId = parseInt(id, 10);
+
+      // Check if values are valid numbers
+      if (!isNaN(beforeHeight) && !isNaN(beforeId)) {
+        queryParams.push(beforeHeight, beforeId);
+        conditions += `\nAND (b.height < $${queryParams.length - 1} OR (b.height = $${queryParams.length - 1} AND b.id > $${queryParams.length}))`;
+      }
     }
 
     if (after) {
-      queryParams.push(after);
-      conditions += `\nAND b.id < $${queryParams.length}`;
+      // Try to parse as compound cursor format (height:id)
+      const [height, id] = after.split(':');
+      const afterHeight = parseInt(height, 10);
+      const afterId = parseInt(id, 10);
+
+      // Check if values are valid numbers
+      if (!isNaN(afterHeight) && !isNaN(afterId)) {
+        // For forward pagination with "after", we want records where:
+        // (height < afterHeight) OR (height = afterHeight AND id < afterId)
+        queryParams.push(afterHeight, afterId);
+        conditions += `\nAND (b.height < $${queryParams.length - 1} OR (b.height = $${queryParams.length - 1} AND b.id < $${queryParams.length}))`;
+      }
     }
 
     if (chainIds?.length) {
@@ -182,14 +311,14 @@ export default class BlockDbRepository implements BlockRepository {
       FROM "Blocks" b
       WHERE b.height >= $2
       ${conditions}
-      ORDER BY b.height, b.id ${order}
+      ORDER BY b.height ${order}, b.id ${order}
       LIMIT $1;
     `;
 
     const { rows: blockRows } = await rootPgPool.query(query, queryParams);
 
     const edges = blockRows.map(row => ({
-      cursor: row.id.toString(),
+      cursor: `${row.height.toString()}:${row.id.toString()}`,
       node: blockValidator.validate(row),
     }));
 
@@ -408,8 +537,6 @@ export default class BlockDbRepository implements BlockRepository {
    * @returns Promise resolving to an array of blocks
    */
   async getBlocksByEventIds(eventIds: readonly string[]) {
-    console.info('[INFO][INFRA][INFRA_CONFIG] Batching for event IDs:', eventIds);
-
     const { rows: blockRows } = await rootPgPool.query(
       `SELECT b.*, e.id as "eventId"
         FROM "Events" e
@@ -445,8 +572,6 @@ export default class BlockDbRepository implements BlockRepository {
    * @returns Promise resolving to an array of blocks
    */
   async getBlocksByTransactionIds(transactionIds: string[]) {
-    console.info('[INFO][INFRA][INFRA_CONFIG] Batching for transactionIds IDs:', transactionIds);
-
     const { rows: blockRows } = await rootPgPool.query(
       `SELECT b.id,
         b.hash,
@@ -494,8 +619,6 @@ export default class BlockDbRepository implements BlockRepository {
    * @returns Promise resolving to an array of blocks
    */
   async getBlockByHashes(hashes: string[]): Promise<BlockOutput[]> {
-    console.info('[INFO][INFRA][INFRA_CONFIG] Batching for hashes:', hashes);
-
     const { rows: blockRows } = await rootPgPool.query(
       `SELECT b.id,
         b.hash,
@@ -582,6 +705,27 @@ export default class BlockDbRepository implements BlockRepository {
     });
 
     return block?.transactionsCount || 0;
+  }
+
+  /**
+   * Counts the total number of transactions in a specific block
+   *
+   * This method performs a COUNT query to determine how many transactions
+   * are associated to a particular block.
+   *
+   * @param blockHash - The hash of the block to count transactions for
+   * @returns Promise resolving to the total count of transactions in the block
+   */
+  async getTotalCountOfBlockTransactions(blockHash: string): Promise<number> {
+    const { rows } = await rootPgPool.query(
+      `SELECT COUNT(*) as "totalCount"
+        FROM "Blocks" b
+        JOIN "Transactions" t ON t."blockId" = b.id
+        WHERE b.hash = $1`,
+      [blockHash],
+    );
+
+    return rows[0].totalCount ?? 0;
   }
 
   /**

@@ -6,7 +6,7 @@
  * It specializes in retrieving NFT information from Marmalade v2 contracts.
  */
 
-import { handleSingleQuery } from '../../../utils/raw-query';
+import { handleSingleQuery } from '../../../../utils/raw-query';
 import PactGateway, { GetNftsInfoParams } from '../../gateway/pact-gateway';
 
 /**

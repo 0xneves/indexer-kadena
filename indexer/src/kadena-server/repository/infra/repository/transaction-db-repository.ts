@@ -33,153 +33,15 @@ import { signerMetaValidator } from '../schema-validator/signer-schema-validator
 import { MEMORY_CACHE } from '../../../../cache/init';
 import { NETWORK_STATISTICS_KEY } from '../../../../cache/keys';
 import { NetworkStatistics } from '../../application/network-repository';
-
-/**
- * Helper function to determine the appropriate SQL operator based on parameter position.
- * For the first condition in a query, we use 'WHERE', for subsequent conditions, we use 'AND'.
- *
- * @param paramsLength - The current number of parameters in the query
- * @returns The appropriate SQL operator ('WHERE' or 'AND')
- */
-const operator = (paramsLength: number) => (paramsLength > 2 ? `\nAND` : 'WHERE');
+import BlockDbRepository from './block-db-repository';
+import TransactionQueryBuilder from '../query-builders/transaction-query-builder';
 
 /**
  * Database-specific implementation of the TransactionRepository interface.
  * This class handles all transaction-related database operations using PostgreSQL.
  */
 export default class TransactionDbRepository implements TransactionRepository {
-  /**
-   * Creates SQL conditions for filtering transactions by block-related attributes.
-   * This handles conditions like block hash, chain ID, height range, and confirmation depth.
-   *
-   * @param params - Transaction query parameters containing block filter conditions
-   * @param queryParams - Current array of query parameters (for parameter indexing)
-   * @returns Object containing the generated SQL conditions and updated parameter array
-   */
-  private createBlockConditions(
-    params: GetTransactionsParams,
-    queryParams: Array<string | number>,
-  ) {
-    const { blockHash, chainId, maxHeight, minHeight, minimumDepth } = params;
-    let blocksConditions = '';
-    const blockParams: (string | number)[] = [...queryParams];
-
-    // Add block hash condition if specified
-    if (blockHash) {
-      blockParams.push(blockHash);
-      const op = operator(blockParams.length);
-      blocksConditions += `${op} b.hash = $${blockParams.length}`;
-    }
-
-    // Add chain ID condition if specified
-    if (chainId) {
-      blockParams.push(chainId);
-      const op = operator(blockParams.length);
-      blocksConditions += `${op} b."chainId" = $${blockParams.length}`;
-    }
-
-    // Add maximum height condition if specified
-    if (maxHeight) {
-      blockParams.push(maxHeight);
-      const op = operator(blockParams.length);
-      blocksConditions += `${op} b."height" <= $${blockParams.length}`;
-    }
-
-    // Add minimum height condition if specified
-    if (minHeight) {
-      blockParams.push(minHeight);
-      const op = operator(blockParams.length);
-      blocksConditions += `${op} b."height" >= $${blockParams.length}`;
-    }
-
-    // Add minimum confirmation depth condition if specified
-    if (minimumDepth) {
-      blockParams.push(minimumDepth);
-      const op = operator(blockParams.length);
-      blocksConditions += `${op} b."minimumDepth" >= $${blockParams.length}`;
-    }
-
-    return { blocksConditions, blockParams };
-  }
-
-  /**
-   * Creates SQL conditions for filtering transactions by transaction-specific attributes.
-   * This handles conditions like account name, cursor-based pagination, request key,
-   * fungible token name, and NFT token ownership.
-   *
-   * @param params - Transaction query parameters containing transaction filter conditions
-   * @param queryParams - Current array of query parameters (for parameter indexing)
-   * @returns Object containing the generated SQL conditions and updated parameter array
-   */
-  private createTransactionConditions(
-    params: GetTransactionsParams,
-    queryParams: Array<string | number>,
-  ) {
-    const { accountName, after, before, requestKey, fungibleName, hasTokenId = false } = params;
-    let conditions = '';
-
-    const transactionParams: (string | number)[] = [];
-
-    const localOperator = (paramsLength: number) => (paramsLength > 1 ? `\nAND` : 'WHERE');
-
-    // Add sender account condition for regular (non-NFT) transactions
-    if (accountName && !hasTokenId) {
-      transactionParams.push(accountName);
-      const op = localOperator(transactionParams.length);
-      conditions += `${op} t.sender = $${queryParams.length + transactionParams.length}`;
-    }
-
-    // Add 'after' cursor condition for pagination
-    if (after) {
-      transactionParams.push(after);
-      const op = localOperator(transactionParams.length);
-      conditions += `${op} t.creationtime < $${queryParams.length + transactionParams.length}`;
-    }
-
-    // Add 'before' cursor condition for pagination
-    if (before) {
-      transactionParams.push(before);
-      const op = localOperator(transactionParams.length);
-      conditions += `${op} t.creationtime > $${queryParams.length + transactionParams.length}`;
-    }
-
-    // Add request key condition for exact transaction lookup
-    if (requestKey) {
-      transactionParams.push(requestKey);
-      const op = localOperator(transactionParams.length);
-      conditions += `${op} t."requestkey" = $${queryParams.length + transactionParams.length}`;
-    }
-
-    // Add fungible token name condition using a subquery on Events table
-    if (fungibleName) {
-      transactionParams.push(fungibleName);
-      const op = localOperator(transactionParams.length);
-      conditions += `
-        ${op} EXISTS
-        (
-          SELECT 1
-          FROM "Events" e
-          WHERE e."transactionId" = t.id
-          AND e."module" = $${queryParams.length + transactionParams.length}
-        )`;
-    }
-
-    // Add NFT ownership condition using a subquery on Transfers table
-    if (accountName && hasTokenId) {
-      transactionParams.push(accountName);
-      const op = localOperator(queryParams.length + transactionParams.length);
-      conditions += `
-        ${op} EXISTS
-        (
-          SELECT 1
-          FROM "Transfers" t
-          WHERE (t."from_acct" = $${transactionParams.length} OR t."to_acct" = $${transactionParams.length})
-          AND t."modulename" = 'marmalade-v2.ledger'
-        )`;
-    }
-
-    return { conditions, params: [...queryParams, ...transactionParams] };
-  }
+  private queryBuilder = new TransactionQueryBuilder();
 
   /**
    * Retrieves transactions based on specified parameters with pagination.
@@ -190,17 +52,7 @@ export default class TransactionDbRepository implements TransactionRepository {
    * @returns Promise resolving to paginated transaction results
    */
   async getTransactions(params: GetTransactionsParams) {
-    const {
-      blockHash,
-      after: afterEncoded,
-      before: beforeEncoded,
-      chainId,
-      first,
-      last,
-      maxHeight,
-      minHeight,
-      minimumDepth,
-    } = params;
+    const { after: afterEncoded, before: beforeEncoded, first, last, minimumDepth } = params;
 
     // Process pagination parameters
     const { limit, order, after, before } = getPaginationParams({
@@ -210,137 +62,107 @@ export default class TransactionDbRepository implements TransactionRepository {
       last,
     });
 
-    // Determine if block-based filtering is the primary access pattern
-    // This affects the query strategy for optimal performance
-    const isBlockQueryFirst = blockHash || minHeight || maxHeight || minimumDepth || chainId;
-
-    // Initialize query parameters and condition strings
-    const queryParams: (string | number)[] = [];
-    let blocksConditions = '';
-    let transactionsConditions = '';
-
-    // Build query conditions based on the primary access pattern
-    if (isBlockQueryFirst) {
-      // Start with block conditions when block filtering is primary
-      const { blockParams, blocksConditions: bConditions } = this.createBlockConditions(params, [
+    // If no minimumDepth is specified, we can use the normal query approach
+    if (!minimumDepth) {
+      // Build and execute the query using the query builder
+      const { query, queryParams } = this.queryBuilder.buildTransactionsQuery({
+        ...params,
+        after,
+        before,
+        order,
         limit,
-      ]);
+      });
 
-      const { params: txParams, conditions: txConditions } = this.createTransactionConditions(
-        { ...params, after, before },
-        blockParams,
-      );
+      // Execute the query with the constructed parameters
+      const { rows } = await rootPgPool.query(query, queryParams);
 
-      queryParams.push(...txParams);
-      transactionsConditions = txConditions;
-      blocksConditions = bConditions;
-    } else {
-      // Start with transaction conditions when transaction filtering is primary
-      const { conditions, params: txParams } = this.createTransactionConditions(
-        { ...params, after, before },
-        [limit],
-      );
-      const { blocksConditions: bConditions, blockParams } = this.createBlockConditions(
-        params,
-        txParams,
-      );
+      // Transform database rows into GraphQL-compatible edges with cursors
+      const edges = rows
+        .map(row => ({
+          cursor: row.creationTime.toString(),
+          node: transactionValidator.validate(row),
+        }))
+        .sort((a, b) => {
+          // Primary sort is already done by DB query (creationTime DESC)
+          // Add secondary sort by id for consistent ordering when creationTimes are equal
+          const aNode = a.node as unknown as { id: string };
+          const bNode = b.node as unknown as { id: string };
+          if (a.cursor === b.cursor) {
+            return aNode.id > bNode.id ? 1 : -1;
+          }
+          return 0; // Maintain existing order from DB for different creationTimes
+        });
 
-      queryParams.push(...blockParams);
-      transactionsConditions = conditions;
-      blocksConditions = bConditions;
+      const pageInfo = getPageInfo({ edges, order, limit, after, before });
+      return pageInfo;
     }
 
-    // Construct the appropriate SQL query based on the primary access pattern
-    let query = '';
-    if (isBlockQueryFirst) {
-      // Block-first query strategy: filter blocks first, then join to transactions
-      query = `
-        WITH filtered_block AS (
-          SELECT b.id, b.hash, b."chainId", b.height
-          FROM "Blocks" b
-          ${blocksConditions}
-        )
-        SELECT
-          t.id AS id,
-          t.creationtime AS "creationTime",
-          t.hash AS "hashTransaction",
-          td.nonce AS "nonceTransaction",
-          td.sigs AS sigs,
-          td.continuation AS continuation,
-          t.num_events AS "eventCount",
-          td.pactid AS "pactId",
-          td.proof AS proof,
-          td.rollback AS rollback,
-          t.txid AS txid,
-          b.height AS "height",
-          b."hash" AS "blockHash",
-          b."chainId" AS "chainId",
-          td.gas AS "gas",
-          td.step AS step,
-          td.data AS data,
-          td.code AS code,
-          t.logs AS "logs",
-          t.result AS "result",
-          t.requestkey AS "requestKey"
-        FROM filtered_block b
-        JOIN "Transactions" t ON b.id = t."blockId"
-        LEFT JOIN "TransactionDetails" td ON t.id = td."transactionId"
-        ${transactionsConditions}
-        ORDER BY t.creationtime ${order}
-        LIMIT $1
-      `;
-    } else {
-      // Transaction-first query strategy: filter transactions first, then join to blocks
-      query = `
-        WITH filtered_transactions AS (
-          SELECT t.id, t."blockId", t.hash, t.num_events, t.txid, t.logs, t.result, t.requestkey, t."chainId", t.creationtime
-          FROM "Transactions" t
-          ${transactionsConditions}
-          ORDER BY t.creationtime ${order}
-          LIMIT $1
-        )
-        SELECT
-          t.id AS id,
-          t.creationtime AS "creationTime",
-          t.hash AS "hashTransaction",
-          td.nonce AS "nonceTransaction",
-          td.sigs AS sigs,
-          td.continuation AS continuation,
-          t.num_events AS "eventCount",
-          td.pactid AS "pactId",
-          td.proof AS proof,
-          td.rollback AS rollback,
-          t.txid AS txid,
-          b.height AS "height",
-          b."hash" AS "blockHash",
-          b."chainId" AS "chainId",
-          td.gas AS "gas",
-          td.step AS step,
-          td.data AS data,
-          td.code AS code,
-          td.nonce,
-          td.sigs,
-          t.logs AS "logs",
-          t.result AS "result",
-          t.requestkey AS "requestKey"
-        FROM filtered_transactions t
-        JOIN "Blocks" b ON b.id = t."blockId"
-        LEFT JOIN "TransactionDetails" td ON t.id = td."transactionId"
-        ${blocksConditions}
-      `;
+    // When minimumDepth is specified, handle batch fetching and depth filtering
+    let allFilteredTransactions: any[] = [];
+    let lastCursor: string | null = null;
+    let hasMoreTransactions = true;
+    const batchSize = Math.max(limit * 3, 50); // Fetch more than needed for depth filtering
+
+    // Continue fetching batches until we have enough transactions that meet depth requirement
+    while (allFilteredTransactions.length < limit && hasMoreTransactions) {
+      // Build and execute query for this batch
+      const { query, queryParams } = this.queryBuilder.buildTransactionsQuery({
+        ...params,
+        after: lastCursor || after,
+        before,
+        order,
+        limit: batchSize,
+      });
+
+      const { rows: transactionBatch } = await rootPgPool.query(query, queryParams);
+
+      hasMoreTransactions = transactionBatch.length === batchSize;
+
+      if (transactionBatch.length === 0) {
+        break; // No more transactions to process
+      }
+
+      // Extract block hashes and get depth map
+      const blockHashes = Array.from(new Set(transactionBatch.map(tx => tx.blockHash)));
+      const blockRepository = new BlockDbRepository();
+      const blockHashToDepth = await blockRepository.createBlockDepthMap(
+        blockHashes.map(hash => ({ hash })),
+        'hash',
+        minimumDepth,
+      );
+
+      // Filter transactions by block depth
+      const filteredBatch = transactionBatch.filter(
+        tx => blockHashToDepth[tx.blockHash] >= minimumDepth,
+      );
+
+      allFilteredTransactions = [...allFilteredTransactions, ...filteredBatch];
+
+      // Update cursor for next batch
+      if (transactionBatch.length > 0) {
+        const lastTransaction = transactionBatch[transactionBatch.length - 1];
+        lastCursor = lastTransaction.creationTime.toString();
+      }
     }
 
-    // Execute the query with the constructed parameters
-    const { rows } = await rootPgPool.query(query, queryParams);
+    // Create edges for paginated result and apply sorting
+    const edges = allFilteredTransactions
+      .slice(0, limit)
+      .map(tx => ({
+        cursor: tx.creationTime.toString(),
+        node: transactionValidator.validate(tx),
+      }))
+      .sort((a, b) => {
+        // Apply same sorting as in non-minimumDepth case
+        const aNode = a.node as unknown as { id: string };
+        const bNode = b.node as unknown as { id: string };
+        if (a.cursor === b.cursor) {
+          return aNode.id > bNode.id ? 1 : -1;
+        }
+        return 0;
+      });
 
-    // Transform database rows into GraphQL-compatible edges with cursors
-    const edges = rows.map(row => ({
-      cursor: row.creationTime.toString(),
-      node: transactionValidator.validate(row),
-    }));
-
-    const pageInfo = getPageInfo({ edges, order, limit, after, before });
-    return pageInfo;
+    return getPageInfo({ edges, order, limit, after, before });
   }
 
   /**
@@ -437,11 +259,6 @@ export default class TransactionDbRepository implements TransactionRepository {
       conditions += `\nAND b."hash" = $${queryParams.length}`;
     }
 
-    if (minimumDepth !== undefined && minimumDepth !== null) {
-      queryParams.push(minimumDepth);
-      conditions += `\nAND b.height >= $${queryParams.length}`;
-    }
-
     const query = `
       SELECT t.id as id,
       t.hash as "hashTransaction",
@@ -472,8 +289,21 @@ export default class TransactionDbRepository implements TransactionRepository {
 
     const { rows } = await rootPgPool.query(query, queryParams);
 
-    const output = rows.map(row => transactionValidator.validate(row));
+    let transactions: TransactionOutput[] = [...rows];
 
+    if (minimumDepth) {
+      const blockRepository = new BlockDbRepository();
+      const blockHashToDepth = await blockRepository.createBlockDepthMap(
+        rows.map(row => ({ hash: row.blockHash })),
+        'hash',
+        minimumDepth,
+      );
+
+      const filteredTxs = rows.filter(event => blockHashToDepth[event.blockHash] >= minimumDepth);
+      transactions = [...filteredTxs];
+    }
+
+    const output = transactions.map(row => transactionValidator.validate(row));
     return output;
   }
 
@@ -713,8 +543,6 @@ export default class TransactionDbRepository implements TransactionRepository {
    * @returns Promise resolving to matching transactions
    */
   async getTransactionsByEventIds(eventIds: readonly string[]): Promise<TransactionOutput[]> {
-    console.info('[INFO][INFRA][INFRA_CONFIG] Batching for event IDs:', eventIds);
-
     const { rows } = await rootPgPool.query(
       `SELECT t.id as id,
       t.hash as "hashTransaction",

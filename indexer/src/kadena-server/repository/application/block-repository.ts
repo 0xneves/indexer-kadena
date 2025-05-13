@@ -60,6 +60,8 @@ export default interface BlockRepository {
 
   getTotalCountOfBlockEvents(blockHash: string): Promise<number>;
 
+  getTotalCountOfBlockTransactions(blockHash: string): Promise<number>;
+
   getLatestBlocks(params: GetLatestBlocksParams): Promise<BlockOutput[]>;
 
   getTransactionsOrderedByBlockDepth(

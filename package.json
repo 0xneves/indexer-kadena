@@ -9,15 +9,10 @@
   "homepage": "",
   "bugs": "",
   "workspaces": [
-    "web",
-    "indexer",
-    "serverless",
-    "terraform"
+    "indexer"
   ],
   "scripts": {
     "indexer": "yarn workspace @kadena-indexer/indexer",
-    "terraform": "yarn workspace @kadena-indexer/terraform",
-    "run-terraform-workflow": "act -W .github/workflows/terraform.yml -P ubuntu-latest=-self-hosted --artifact-server-path ./.github/workflows/.artifacts/ --secret-file ./terraform/.env",
     "run-indexer-workflow": "act -W .github/workflows/indexer.yml --secret-file ./indexer/.env",
     "format": "prettier --write \"**/*.{yml,yaml,json,md,js,ts}\"",
     "format:check": "prettier --check \"**/*.{yml,yaml,json,md,js,ts}\"",

@@ -15,7 +15,7 @@
 import { rootPgPool } from '../../../../config/database';
 import BalanceModel from '../../../../models/balance';
 import { formatBalance_NODE, formatGuard_NODE } from '../../../../utils/chainweb-node';
-import { handleSingleQuery } from '../../../utils/raw-query';
+import { handleSingleQuery } from '../../../../utils/raw-query';
 import BalanceRepository, {
   FungibleAccountOutput,
   FungibleChainAccountOutput,

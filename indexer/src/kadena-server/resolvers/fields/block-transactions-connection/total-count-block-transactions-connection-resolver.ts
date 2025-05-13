@@ -27,7 +27,7 @@ export const totalCountBlockTransactionsConnectionResolver: BlockTransactionsCon
   async (parent, _args, context) => {
     const { blockHash } = schema.parse(parent);
 
-    const total = await context.blockRepository.getTotalCountOfBlockEvents(blockHash);
+    const total = await context.blockRepository.getTotalCountOfBlockTransactions(blockHash);
 
     return total;
   };

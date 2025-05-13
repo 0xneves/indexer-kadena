@@ -15,8 +15,8 @@
 import { BlockAttributes } from '../../../../models/block';
 import zod from 'zod';
 import { BlockOutput } from '../../application/block-repository';
-import { convertStringToDate } from '../../../utils/date';
-import { calculateBlockDifficulty } from '../../../utils/difficulty';
+import { convertStringToDate } from '../../../../utils/date';
+import { calculateBlockDifficulty } from '../../../../utils/difficulty';
 import { int64ToUint64String } from '../../../../utils/int-uint-64';
 
 /**

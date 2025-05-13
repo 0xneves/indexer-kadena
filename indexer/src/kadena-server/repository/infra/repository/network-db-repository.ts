@@ -18,14 +18,14 @@ import {
   BlockWithDifficulty,
   calculateBlockDifficulty,
   calculateTotalDifficulty,
-} from '../../../utils/difficulty';
-import { calculateNetworkHashRate } from '../../../utils/hashrate';
+} from '../../../../utils/difficulty';
+import { calculateNetworkHashRate } from '../../../../utils/hashrate';
 import { rootPgPool } from '../../../../config/database';
 import { nodeInfoValidator } from '../schema-validator/node-info-validator';
 import { getRequiredEnvString } from '../../../../utils/helpers';
 import { MEMORY_CACHE } from '../../../../cache/init';
 import { HASH_RATE_AND_TOTAL_DIFFICULTY_KEY, NETWORK_STATISTICS_KEY } from '../../../../cache/keys';
-import { getCirculationNumber } from '../../../utils/coin-circulation';
+import { getCirculationNumber } from '../../../../utils/coin-circulation';
 
 // Configuration values from environment variables
 const HOST_URL = getRequiredEnvString('NODE_API_URL');

@@ -265,20 +265,10 @@ export default class TransferDbRepository implements TransferRepository {
     amount,
     pactId,
     requestKey,
+    receiverAccount,
+    senderAccount,
   }: GetCrossChainTransferByPactIdParams) {
-    let requestKeyParam = pactId;
-
-    if (pactId === requestKey) {
-      const query = `
-        SELECT requestkey
-        FROM "Transactions" t
-        JOIN "TransactionDetails" td ON t.id = td."transactionId"
-        WHERE td.pactid = $1 AND requestkey != $1
-      `;
-      const { rows } = await rootPgPool.query(query, [requestKey]);
-      const row = rows[0];
-      requestKeyParam = row.requestkey;
-    }
+    const requestKeyParam = requestKey !== pactId ? requestKey : pactId;
 
     const query = `
       select transfers.id as id,
@@ -301,9 +291,16 @@ export default class TransferDbRepository implements TransferRepository {
       left join "TransactionDetails" td on transactions.id = td."transactionId"
       where transactions.requestkey = $1
       and transfers.amount = $2
+      and transfers.from_acct = $3
+      and transfers.to_acct = $4
     `;
 
-    const { rows } = await rootPgPool.query(query, [requestKeyParam, amount]);
+    const { rows } = await rootPgPool.query(query, [
+      requestKeyParam,
+      amount,
+      senderAccount,
+      receiverAccount,
+    ]);
 
     const [row] = rows;
     if (!row) return null;

@@ -4,6 +4,7 @@ import { blocksFromHeightFixture001 } from '../fixtures/blocks-from-height/block
 import { blocksFromHeightFixture002 } from '../fixtures/blocks-from-height/blocks-from-height.fixture.002';
 import { blocksFromHeightFixture003 } from '../fixtures/blocks-from-height/blocks-from-height.fixture.003';
 import { blocksFromHeightFixture004 } from '../fixtures/blocks-from-height/blocks-from-height.fixture.004';
+import { blocksFromHeightFixture005 } from '../fixtures/blocks-from-height/blocks-from-height.fixture.005';
 const client = new GraphQLClient(process.env.API_URL ?? 'http://localhost:3001/graphql');
 
 describe('Blocks from height', () => {
@@ -23,12 +24,11 @@ describe('Blocks from height', () => {
     expect(blocksFromHeightFixture002.data).toMatchObject(data);
   });
 
-  //
   it('#003', async () => {
     const query = getBlocksFromHeightQuery({
       startHeight: 2000000,
       endHeight: 4000000,
-      after: 'OTE1OTgwMzE=',
+      after: 'NDAwMDAwMDo3NTkwNjA3MQ==',
     });
     const data = await client.request(query);
     expect(blocksFromHeightFixture003.data).toMatchObject(data);
@@ -44,14 +44,14 @@ describe('Blocks from height', () => {
     expect(blocksFromHeightFixture004.data).toMatchObject(data);
   });
 
-  it.skip('#005', async () => {
+  it('#005', async () => {
     const query = getBlocksFromHeightQuery({
       startHeight: 2000000,
       endHeight: 4000000,
       chainIds: ['8'],
-      after: 'OTE1OTgwMzE=',
+      after: 'NDAwMDAwMDo4ODYzOTk0Mg==',
     });
     const data = await client.request(query);
-    expect(null).toMatchObject(data);
+    expect(blocksFromHeightFixture005.data).toMatchObject(data);
   });
 });
