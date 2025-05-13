@@ -1,5 +1,14 @@
 # Changelog
 
+## May 6 - May 13, 2025
+
+- fix: order index property for events in streaming process
+- fix: changed node info validator to accept nullable a node service date
+- refactor: removed dead code
+- refactor: adjusted file locations/paths
+- feat: health route for status 200
+- feat: monitoring service with slack integration
+
 ## April 22 - May 6, 2025
 
 - docs: comprehensive codebase documentation
